@@ -1,5 +1,6 @@
 package com.receiptprocessor.receipt_processor.service;
 
+import com.receiptprocessor.receipt_processor.model.Item;
 import com.receiptprocessor.receipt_processor.model.Receipt;
 import org.springframework.stereotype.Service;
 
@@ -31,45 +32,50 @@ public class ReceiptService {
     private int calculatePoints(Receipt receipt) {
         int points = 0;
 
-        // 1. Points for alphanumeric characters in retailer name
+        // Points for alphanumeric characters in retailer name
         points += receipt.getRetailer().replaceAll("[^a-zA-Z0-9]", "").length();
 
-        // 2. Points for round dollar total
+        // Points for round dollar total
         BigDecimal total = new BigDecimal(receipt.getTotal());
         if (total.scale() == 0) {
             points += 50;
         }
 
-        // 3. Points for multiples of 0.25 in total
+        // Points for multiples of 0.25 in total
         if (new BigDecimal(receipt.getTotal()).remainder(BigDecimal.valueOf(0.25)).compareTo(BigDecimal.ZERO) == 0) {
             points += 25;
         }
 
-        // 4. Points for every two items
+        // Points for every two items
         points += (receipt.getItems().size() / 2) * 5;
 
-        // 5. Points for item descriptions and odd day check
-        points += receipt.getItems().stream().mapToInt(item -> {
-            String desc = item.getShortDescription().trim();
-            if (desc.length() % 3 == 0) {
-                return new BigDecimal(item.getPrice()).multiply(BigDecimal.valueOf(0.2)).setScale(0, RoundingMode.UP).intValue();
-            }
-            return 0;
-        }).sum();
+        // Points for item descriptions and odd day check
+        points += receipt.getItems().stream()
+                .filter(item -> item.getShortDescription().trim().length() % 3 == 0)
+                .mapToInt(item -> calculatePointsForItem(item))
+                .sum();
 
-        // 6. Points for odd day
+        // Points for odd day
         LocalDate purchaseDate = LocalDate.parse(receipt.getPurchaseDate());
         if (purchaseDate.getDayOfMonth() % 2 != 0) {
             points += 6;
         }
 
-        // 7. Points for purchase time
+        // Points for purchase time
         LocalTime purchaseTime = LocalTime.parse(receipt.getPurchaseTime());
         if (purchaseTime.isAfter(LocalTime.of(14, 0)) && purchaseTime.isBefore(LocalTime.of(16, 0))) {
             points += 10;
         }
 
         return points;
+    }
+
+    // Helper method for item points calculation
+    private int calculatePointsForItem(Item item) {
+        return new BigDecimal(item.getPrice())
+                .multiply(BigDecimal.valueOf(0.2))
+                .setScale(0, RoundingMode.UP)
+                .intValue();
     }
 }
 
